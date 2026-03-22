@@ -1,0 +1,133 @@
+<div class="app-layout" [class.sidebar-collapsed]="!isMenuOpen">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" [class.open]="isMenuOpen" [class.hovered]="isSidebarHovered"
+    (mouseenter)="sidebarAutohide && (isSidebarHovered = true)"
+    (mouseleave)="sidebarAutohide && (isSidebarHovered = false)">
+    <div class="sidebar-header">
+      <span class="logo">📋</span>
+      @if (isMenuOpen) {
+        <span class="app-title">{{ appName }}</span>
+      }
+    </div>
+    <nav class="sidebar-nav">
+      @for (item of filteredNavItems; track item.id) {
+        @if (item.children) {
+          <div class="nav-group">
+            <button class="nav-item" (click)="toggleNav(item.id)"
+              [class.active]="expandedNavs[item.id]">
+              <span class="nav-icon">{{ item.icon }}</span>
+              @if (isMenuOpen) {
+                <span class="nav-label">{{ item.label }}</span>
+                <span class="nav-chevron" [class.expanded]="expandedNavs[item.id]">▸</span>
+              }
+            </button>
+            @if (expandedNavs[item.id] && isMenuOpen) {
+              <div class="nav-children">
+                @for (child of item.children; track child.id) {
+                  <a class="nav-child" [routerLink]="child.route"
+                    [class.active]="isActive(child.route)">
+                    {{ child.label }}
+                  </a>
+                }
+              </div>
+            }
+          </div>
+        } @else {
+          <a class="nav-item" [routerLink]="item.route"
+            [class.active]="isActive(item.route || '')">
+            <span class="nav-icon">{{ item.icon }}</span>
+            @if (isMenuOpen) {
+              <span class="nav-label">{{ item.label }}</span>
+            }
+          </a>
+        }
+      }
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-wrapper">
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-left">
+        <button class="menu-toggle" (click)="toggleMenu()">☰</button>
+        <div class="search-box">
+          <input type="text" placeholder="Search..." [(ngModel)]="searchQuery"
+            (input)="onSearch()" (focus)="onSearch()">
+          @if (showSearch && searchResults) {
+            <div class="search-dropdown">
+              <div class="search-overlay" (click)="closeSearch()"></div>
+              <div class="search-results">
+                @if (searchResults.customers?.length) {
+                  <div class="search-group">
+                    <div class="search-group-title">Customers ({{ searchResults.customers.length }})</div>
+                    @for (c of searchResults.customers; track c.id) {
+                      <div class="search-result" (click)="goToResult('customers', c)">
+                        <strong>{{ c.company_name || (c.first_name + ' ' + c.last_name) }}</strong>
+                        <span>{{ c.email }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+                @if (searchResults.devices?.length) {
+                  <div class="search-group">
+                    <div class="search-group-title">Devices ({{ searchResults.devices.length }})</div>
+                    @for (d of searchResults.devices; track d.id) {
+                      <div class="search-result" (click)="goToResult('devices', d)">
+                        <strong>{{ d.name }}</strong>
+                        <span>{{ d.ip_address }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+                @if (searchResults.plans?.length) {
+                  <div class="search-group">
+                    <div class="search-group-title">Plans ({{ searchResults.plans.length }})</div>
+                    @for (p of searchResults.plans; track p.id) {
+                      <div class="search-result" (click)="goToResult('plans', p)">
+                        <strong>{{ p.description | slice:0:50 }}</strong>
+                      </div>
+                    }
+                  </div>
+                }
+                @if (!searchResults.customers?.length && !searchResults.devices?.length && !searchResults.plans?.length) {
+                  <div class="search-empty">No results found</div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+      <div class="header-right">
+        <button class="theme-toggle" (click)="theme.setTheme(theme.isDark ? 'light' : 'dark')">
+          {{ theme.isDark ? '☀️' : '🌙' }}
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="content">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+
+  <!-- TOASTS -->
+  <div class="toast-container" [ngClass]="'toast-' + toastPosition">
+    @for (toast of toasts; track toast.id) {
+      <div class="toast" [class]="'toast-' + toast.type" [class.toast-fading]="toast.fading"
+        [style.opacity]="toastOpacity" [style.color]="toastTextColor"
+        (click)="removeToast(toast.id)">
+        <span class="toast-icon">
+          @switch (toast.type) {
+            @case ('success') { ✓ }
+            @case ('error') { ✕ }
+            @case ('warning') { ⚠ }
+            @case ('info') { ℹ }
+          }
+        </span>
+        <span class="toast-message">{{ toast.message }}</span>
+        <button class="toast-close" [style.color]="toastTextColor" (click)="removeToast(toast.id)">×</button>
+      </div>
+    }
+  </div>
+</div>

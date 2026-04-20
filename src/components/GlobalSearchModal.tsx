@@ -1,6 +1,7 @@
 import { html } from 'htm/preact';
 import { icons } from '../constants/icons';
 import { useMemo } from 'preact/hooks';
+import { Modal } from './Modal';
 
 const ResultItem = ({ item, type, onClick, customerMap, deviceMap, companyLegalFormId }) => {
     let title, subtitle;
@@ -55,8 +56,7 @@ export const GlobalSearchModal = ({ query, results, onClose, onResultClick, cust
     }, [enumerations]);
 
     return html`
-        <div class="modal-overlay" onClick=${onClose}>
-            <div class="search-results-modal-content" onClick=${e => e.stopPropagation()}>
+        <${Modal} onClose=${onClose} customClass="search-results-modal-content">
                 <div class="search-results-header">
                     Search results for: <span>"${query}"</span>
                 </div>
@@ -105,7 +105,6 @@ export const GlobalSearchModal = ({ query, results, onClose, onResultClick, cust
                  <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onClick=${onClose}>Close</button>
                 </div>
-            </div>
-        </div>
+        <//>
     `;
 };

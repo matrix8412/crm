@@ -70,7 +70,7 @@ export const DeviceTreeView = ({ devices, deviceMap, enumMaps, setModal, toggleD
     };
     
     // Expand all nodes when searching to reveal matches
-    useMemo(() => {
+    useEffect(() => {
         if (searchTerm) {
             const allNodeIds = new Set<string>();
             const collectIds = (nodes: DeviceTreeNode[]) => {

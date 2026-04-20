@@ -518,26 +518,28 @@ tbody tr:hover {
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.6);
   display: flex;
-  justify-content: center;
-  align-items: center;
+    justify-content: flex-end;
+    align-items: stretch;
   z-index: 1050;
   animation: fadeIn 0.3s ease;
 }
 
 .modal-content {
   background-color: var(--content-bg-color);
-  border-radius: 12px;
-  box-shadow: 0 10px 25px var(--shadow-color-dark);
-  width: 90%;
-  max-width: 800px;
-  max-height: 90vh;
+    border-radius: 24px 0 0 24px;
+    box-shadow: -12px 0 32px var(--shadow-color-dark);
+    width: min(840px, 100vw);
+    max-width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
   display: flex;
   flex-direction: column;
-  animation: slideIn 0.3s ease;
+    overflow: hidden;
+    animation: slideInFromRight 0.3s ease;
 }
 
 .modal-content.modal-device-details {
-    max-width: 1200px;
+        width: min(1120px, 100vw);
 }
 
 /* This allows form-based modals to scroll correctly */
@@ -2129,15 +2131,7 @@ td[data-label="Changes"] {
 }
 
 .search-results-modal-content {
-    background-color: var(--content-bg-color);
-    border-radius: 12px;
-    box-shadow: 0 10px 25px var(--shadow-color-dark);
-    width: 90%;
-    max-width: 700px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    animation: slideIn 0.3s ease;
+    width: min(720px, 100vw);
 }
 .search-results-header {
     padding: 1rem 1.5rem;
@@ -2384,6 +2378,11 @@ td[data-label="Changes"] {
   to { translateY(0); opacity: 1; }
 }
 
+@keyframes slideInFromRight {
+    from { transform: translateX(48px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
 /* --- Autohide Sidebar --- */
 @media (min-width: 1081px) {
     /* When autohide is on, sidebar becomes a fixed overlay */
@@ -2562,7 +2561,8 @@ td[data-label="Changes"] {
 
 
   .modal-content {
-      width: 95%;
+      width: 100vw;
+      border-radius: 0;
   }
 
   .form-grid {

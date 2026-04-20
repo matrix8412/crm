@@ -42,13 +42,16 @@ const Toast = ({ toast, onRemove, textColor }) => {
     removeRef.current = onRemove;
 
     useEffect(() => {
+        let removalTimer: ReturnType<typeof setTimeout>;
         const timer = setTimeout(() => {
             setIsExiting(true);
-            const removalTimer = setTimeout(() => removeRef.current(toast.id), 300);
-            return () => clearTimeout(removalTimer);
+            removalTimer = setTimeout(() => removeRef.current(toast.id), 300);
         }, 5000);
 
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(timer);
+            clearTimeout(removalTimer);
+        };
     }, [toast.id]);
     
     const handleRemove = () => {
@@ -117,14 +120,14 @@ export const UIProvider = ({ children }) => {
     const setToastTextColor = useCallback((v: string) => { setToastTextColorLocal(v); api.saveSetting('toastTextColor', v); }, []);
     const setGlossy = useCallback((v: boolean) => { setGlossyLocal(v); api.saveSetting('glossyMode', v); }, []);
 
-    const addToast = (message: string, type: ToastType = 'info') => {
+    const addToast = useCallback((message: string, type: ToastType = 'info') => {
         const id = self.crypto.randomUUID();
         setToasts(prev => [...prev, { id, message, type }]);
-    };
+    }, []);
 
-    const removeToast = (id: string) => {
+    const removeToast = useCallback((id: string) => {
         setToasts(prev => prev.filter(toast => toast.id !== id));
-    };
+    }, []);
 
     // Apply theme changes globally
     useEffect(() => {

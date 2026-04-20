@@ -12,8 +12,16 @@ const pool = new Pool({
 });
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true,
+}));
 app.use(express.json({ limit: "10mb" }));
+
+// ─── Helper: async route wrapper ─────────────────────────────
+const asyncHandler = (fn: (req: express.Request, res: express.Response, next: express.NextFunction) => Promise<any>) =>
+  (req: express.Request, res: express.Response, next: express.NextFunction) =>
+    Promise.resolve(fn(req, res, next)).catch(next);
 
 // ─── Helper: query wrapper ───────────────────────────────────
 async function query(text: string, params?: any[]) {
@@ -24,6 +32,29 @@ async function query(text: string, params?: any[]) {
   } finally {
     client.release();
   }
+}
+
+async function withTransaction<T>(fn: (client: any) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+async function ensureDeviceSshCredentialColumns() {
+  await query(`
+    ALTER TABLE devices
+    ADD COLUMN IF NOT EXISTS ssh_user VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS ssh_password VARCHAR(255)
+  `);
 }
 
 // ─── Helper: build audit log ─────────────────────────────────
@@ -57,20 +88,20 @@ function computeChanges(oldData: any, newData: any, fields: string[]): any[] {
 // ═══════════════════════════════════════════════════════════════
 // ENUM VALUES
 // ═══════════════════════════════════════════════════════════════
-app.get("/api/enums", async (_req, res) => {
+app.get("/api/enums", asyncHandler(async (_req, res) => {
   const { rows } = await query("SELECT * FROM enum_values ORDER BY category, label");
   res.json(rows);
-});
+}));
 
-app.get("/api/enums/:category", async (req, res) => {
+app.get("/api/enums/:category", asyncHandler(async (req, res) => {
   const { rows } = await query(
     "SELECT * FROM enum_values WHERE category = $1 ORDER BY label",
     [req.params.category]
   );
   res.json(rows);
-});
+}));
 
-app.post("/api/enums", async (req, res) => {
+app.post("/api/enums", asyncHandler(async (req, res) => {
   const { category, label, color, ssid } = req.body;
   const { rows } = await query(
     `INSERT INTO enum_values (category, label, color, ssid)
@@ -79,9 +110,9 @@ app.post("/api/enums", async (req, res) => {
   );
   await logAudit("create", `enum_${category}`, rows[0].id, label);
   res.status(201).json(rows[0]);
-});
+}));
 
-app.put("/api/enums/:id", async (req, res) => {
+app.put("/api/enums/:id", asyncHandler(async (req, res) => {
   const { label, color, ssid } = req.body;
   const old = (await query("SELECT * FROM enum_values WHERE id = $1", [req.params.id])).rows[0];
   if (!old) return res.status(404).json({ error: "Not found" });
@@ -92,9 +123,9 @@ app.put("/api/enums/:id", async (req, res) => {
   const changes = computeChanges(old, rows[0], ["label", "color", "ssid"]);
   if (changes.length) await logAudit("update", `enum_${old.category}`, old.id, label, changes);
   res.json(rows[0]);
-});
+}));
 
-app.patch("/api/enums/:id/toggle-delete", async (req, res) => {
+app.patch("/api/enums/:id/toggle-delete", asyncHandler(async (req, res) => {
   const { rows } = await query(
     `UPDATE enum_values SET is_deleted = NOT is_deleted, updated_at=NOW() WHERE id=$1 RETURNING *`,
     [req.params.id]
@@ -102,7 +133,7 @@ app.patch("/api/enums/:id/toggle-delete", async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: "Not found" });
   await logAudit(rows[0].is_deleted ? "delete" : "create", `enum_${rows[0].category}`, rows[0].id, rows[0].label, [], "system");
   res.json(rows[0]);
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // GENERIC CRUD FACTORY
@@ -115,21 +146,22 @@ function crudRoutes(
   nameGetter: (row: any) => string
 ) {
   // List
-  app.get(`/api/${entityPath}`, async (_req, res) => {
+  app.get(`/api/${entityPath}`, asyncHandler(async (_req, res) => {
     const { rows } = await query(`SELECT * FROM ${tableName} ORDER BY created_at DESC`);
     res.json(rows);
-  });
+  }));
 
   // Get one
-  app.get(`/api/${entityPath}/:id`, async (req, res) => {
+  app.get(`/api/${entityPath}/:id`, asyncHandler(async (req, res) => {
     const { rows } = await query(`SELECT * FROM ${tableName} WHERE id = $1`, [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     res.json(rows[0]);
-  });
+  }));
 
   // Create
-  app.post(`/api/${entityPath}`, async (req, res) => {
+  app.post(`/api/${entityPath}`, asyncHandler(async (req, res) => {
     const cols = fields.filter((f) => req.body[f] !== undefined);
+    if (cols.length === 0) return res.status(400).json({ error: "No valid fields provided" });
     const vals = cols.map((f) => req.body[f]);
     const placeholders = cols.map((_, i) => `$${i + 1}`);
     const { rows } = await query(
@@ -138,13 +170,14 @@ function crudRoutes(
     );
     await logAudit("create", entityType, rows[0].id, nameGetter(rows[0]));
     res.status(201).json(rows[0]);
-  });
+  }));
 
   // Update
-  app.put(`/api/${entityPath}/:id`, async (req, res) => {
+  app.put(`/api/${entityPath}/:id`, asyncHandler(async (req, res) => {
     const old = (await query(`SELECT * FROM ${tableName} WHERE id = $1`, [req.params.id])).rows[0];
     if (!old) return res.status(404).json({ error: "Not found" });
     const cols = fields.filter((f) => req.body[f] !== undefined);
+    if (cols.length === 0) return res.status(400).json({ error: "No valid fields provided" });
     const sets = cols.map((f, i) => `${f}=$${i + 1}`);
     sets.push(`updated_at=NOW()`);
     const vals = cols.map((f) => req.body[f]);
@@ -156,10 +189,10 @@ function crudRoutes(
     const changes = computeChanges(old, rows[0], fields);
     if (changes.length) await logAudit("update", entityType, old.id, nameGetter(rows[0]), changes);
     res.json(rows[0]);
-  });
+  }));
 
   // Toggle delete
-  app.patch(`/api/${entityPath}/:id/toggle-delete`, async (req, res) => {
+  app.patch(`/api/${entityPath}/:id/toggle-delete`, asyncHandler(async (req, res) => {
     const { rows } = await query(
       `UPDATE ${tableName} SET is_deleted = NOT is_deleted, updated_at=NOW() WHERE id=$1 RETURNING *`,
       [req.params.id]
@@ -167,16 +200,16 @@ function crudRoutes(
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     await logAudit(rows[0].is_deleted ? "delete" : "create", entityType, rows[0].id, nameGetter(rows[0]), [], "system");
     res.json(rows[0]);
-  });
+  }));
 
   // Hard delete
-  app.delete(`/api/${entityPath}/:id`, async (req, res) => {
+  app.delete(`/api/${entityPath}/:id`, asyncHandler(async (req, res) => {
     const old = (await query(`SELECT * FROM ${tableName} WHERE id = $1`, [req.params.id])).rows[0];
     if (!old) return res.status(404).json({ error: "Not found" });
     await query(`DELETE FROM ${tableName} WHERE id = $1`, [req.params.id]);
     await logAudit("delete", entityType, old.id, nameGetter(old));
     res.json({ success: true });
-  });
+  }));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -217,7 +250,7 @@ crudRoutes("users", "users", "user",
 crudRoutes("devices", "devices", "device",
   ["name", "vendor_id", "device_group_id", "address_id", "gps_lat", "gps_lon",
    "parent_device_id", "ip_address", "device_type_id", "ssid",
-   "ssh_enabled", "ssh_port", "http_enabled", "http_port",
+   "ssh_enabled", "ssh_port", "ssh_user", "ssh_password", "http_enabled", "http_port",
    "https_enabled", "https_port", "api_enabled", "api_port", "api_user", "api_password",
    "rack_id", "rack_position", "rack_height"],
   (r) => r.name
@@ -263,19 +296,21 @@ crudRoutes("l3-vpns", "l3_vpns", "l3vpn",
 // TAG JUNCTION ROUTES
 // ═══════════════════════════════════════════════════════════════
 function tagRoutes(entityPath: string, tableName: string, fkColumn: string) {
-  app.get(`/api/${entityPath}/:id/tags`, async (req, res) => {
+  app.get(`/api/${entityPath}/:id/tags`, asyncHandler(async (req, res) => {
     const { rows } = await query(`SELECT tag_id FROM ${tableName} WHERE ${fkColumn} = $1`, [req.params.id]);
     res.json(rows.map((r: any) => r.tag_id));
-  });
+  }));
 
-  app.put(`/api/${entityPath}/:id/tags`, async (req, res) => {
+  app.put(`/api/${entityPath}/:id/tags`, asyncHandler(async (req, res) => {
     const tagIds: string[] = req.body.tagIds || [];
-    await query(`DELETE FROM ${tableName} WHERE ${fkColumn} = $1`, [req.params.id]);
-    for (const tagId of tagIds) {
-      await query(`INSERT INTO ${tableName} (${fkColumn}, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [req.params.id, tagId]);
-    }
+    await withTransaction(async (client) => {
+      await client.query(`DELETE FROM ${tableName} WHERE ${fkColumn} = $1`, [req.params.id]);
+      for (const tagId of tagIds) {
+        await client.query(`INSERT INTO ${tableName} (${fkColumn}, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [req.params.id, tagId]);
+      }
+    });
     res.json({ success: true, tagIds });
-  });
+  }));
 }
 
 tagRoutes("prefixes", "prefix_tags", "prefix_id");
@@ -287,7 +322,7 @@ tagRoutes("l3-vpns", "l3_vpn_tags", "l3_vpn_id");
 // ═══════════════════════════════════════════════════════════════
 // COMMENTS
 // ═══════════════════════════════════════════════════════════════
-app.get("/api/comments", async (req, res) => {
+app.get("/api/comments", asyncHandler(async (req, res) => {
   const planId = req.query.plan_id;
   let sql = "SELECT * FROM comments";
   const params: any[] = [];
@@ -298,26 +333,26 @@ app.get("/api/comments", async (req, res) => {
   sql += " ORDER BY created_at DESC";
   const { rows } = await query(sql, params);
   res.json(rows);
-});
+}));
 
-app.post("/api/comments", async (req, res) => {
+app.post("/api/comments", asyncHandler(async (req, res) => {
   const { plan_id, user_id, text } = req.body;
   const { rows } = await query(
     `INSERT INTO comments (plan_id, user_id, text) VALUES ($1, $2, $3) RETURNING *`,
     [plan_id, user_id, text]
   );
   res.status(201).json(rows[0]);
-});
+}));
 
-app.delete("/api/comments/:id", async (req, res) => {
+app.delete("/api/comments/:id", asyncHandler(async (req, res) => {
   await query("DELETE FROM comments WHERE id = $1", [req.params.id]);
   res.json({ success: true });
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // AUDIT LOGS
 // ═══════════════════════════════════════════════════════════════
-app.get("/api/audit-logs", async (req, res) => {
+app.get("/api/audit-logs", asyncHandler(async (req, res) => {
   const { entity_type, entity_id } = req.query;
   let sql = "SELECT * FROM audit_logs";
   const params: any[] = [];
@@ -328,21 +363,21 @@ app.get("/api/audit-logs", async (req, res) => {
   sql += " ORDER BY timestamp DESC";
   const { rows } = await query(sql, params);
   res.json(rows);
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // SETTINGS
 // ═══════════════════════════════════════════════════════════════
-app.get("/api/settings", async (_req, res) => {
+app.get("/api/settings", asyncHandler(async (_req, res) => {
   const { rows } = await query("SELECT * FROM settings");
   const result: Record<string, any> = {};
   for (const row of rows) {
     result[row.key] = row.value;
   }
   res.json(result);
-});
+}));
 
-app.put("/api/settings/:key", async (req, res) => {
+app.put("/api/settings/:key", asyncHandler(async (req, res) => {
   const { value } = req.body;
   await query(
     `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2::jsonb, NOW())
@@ -350,46 +385,47 @@ app.put("/api/settings/:key", async (req, res) => {
     [req.params.key, JSON.stringify(value)]
   );
   res.json({ success: true });
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // DASHBOARD STATS
 // ═══════════════════════════════════════════════════════════════
-app.get("/api/dashboard/stats", async (_req, res) => {
-  const customers = (await query("SELECT COUNT(*) as count FROM customers WHERE NOT is_deleted")).rows[0].count;
-  const devices = (await query("SELECT COUNT(*) as count FROM devices WHERE NOT is_deleted")).rows[0].count;
-  const plans = (await query("SELECT COUNT(*) as count FROM plans WHERE NOT is_deleted")).rows[0].count;
-  const users = (await query("SELECT COUNT(*) as count FROM users WHERE NOT is_deleted")).rows[0].count;
+app.get("/api/dashboard/stats", asyncHandler(async (_req, res) => {
+  const [customersRes, devicesRes, plansRes, usersRes, plansByCategoryRes, customersByLegalFormRes, devicesByTypeRes] = await Promise.all([
+    query("SELECT COUNT(*) as count FROM customers WHERE NOT is_deleted"),
+    query("SELECT COUNT(*) as count FROM devices WHERE NOT is_deleted"),
+    query("SELECT COUNT(*) as count FROM plans WHERE NOT is_deleted"),
+    query("SELECT COUNT(*) as count FROM users WHERE NOT is_deleted"),
+    query(`SELECT e.label, e.color, COUNT(p.id) as count
+           FROM plans p JOIN enum_values e ON p.category_id = e.id
+           WHERE NOT p.is_deleted GROUP BY e.label, e.color`),
+    query(`SELECT e.label, COUNT(c.id) as count
+           FROM customers c JOIN enum_values e ON c.legal_form_id = e.id
+           WHERE NOT c.is_deleted GROUP BY e.label`),
+    query(`SELECT e.label, COUNT(d.id) as count
+           FROM devices d JOIN enum_values e ON d.device_type_id = e.id
+           WHERE NOT d.is_deleted GROUP BY e.label`),
+  ]);
 
-  // Plans by category
-  const plansByCategory = (await query(`
-    SELECT e.label, e.color, COUNT(p.id) as count
-    FROM plans p JOIN enum_values e ON p.category_id = e.id
-    WHERE NOT p.is_deleted GROUP BY e.label, e.color
-  `)).rows;
-
-  // Customers by legal form
-  const customersByLegalForm = (await query(`
-    SELECT e.label, COUNT(c.id) as count
-    FROM customers c JOIN enum_values e ON c.legal_form_id = e.id
-    WHERE NOT c.is_deleted GROUP BY e.label
-  `)).rows;
-
-  // Devices by type
-  const devicesByType = (await query(`
-    SELECT e.label, COUNT(d.id) as count
-    FROM devices d JOIN enum_values e ON d.device_type_id = e.id
-    WHERE NOT d.is_deleted GROUP BY e.label
-  `)).rows;
-
-  res.json({ customers, devices, plans, users, plansByCategory, customersByLegalForm, devicesByType });
-});
+  res.json({
+    customers: customersRes.rows[0].count,
+    devices: devicesRes.rows[0].count,
+    plans: plansRes.rows[0].count,
+    users: usersRes.rows[0].count,
+    plansByCategory: plansByCategoryRes.rows,
+    customersByLegalForm: customersByLegalFormRes.rows,
+    devicesByType: devicesByTypeRes.rows,
+  });
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // GLOBAL SEARCH
 // ═══════════════════════════════════════════════════════════════
-app.get("/api/search", async (req, res) => {
-  const q = `%${req.query.q || ""}%`;
+app.get("/api/search", asyncHandler(async (req, res) => {
+  const rawQ = String(req.query.q || "").trim();
+  if (!rawQ) return res.json({ customers: [], devices: [], plans: [] });
+  const escaped = rawQ.replace(/[%_\\]/g, '\\$&');
+  const q = `%${escaped}%`;
   const customers = (await query(
     `SELECT * FROM customers WHERE NOT is_deleted AND (
       first_name ILIKE $1 OR last_name ILIKE $1 OR company_name ILIKE $1 OR email ILIKE $1 OR customer_number ILIKE $1
@@ -402,12 +438,12 @@ app.get("/api/search", async (req, res) => {
     `SELECT * FROM plans WHERE NOT is_deleted AND description ILIKE $1 LIMIT 10`, [q]
   )).rows;
   res.json({ customers, devices, plans });
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // CURRENCIES
 // ═══════════════════════════════════════════════════════════════
-app.get("/api/currencies", async (_req, res) => {
+app.get("/api/currencies", asyncHandler(async (_req, res) => {
   const { rows: currencies } = await query("SELECT * FROM currencies ORDER BY code");
   const { rows: denominations } = await query("SELECT * FROM denominations ORDER BY currency_id, value DESC");
   const result = currencies.map((c: any) => ({
@@ -415,7 +451,7 @@ app.get("/api/currencies", async (_req, res) => {
     denominations: denominations.filter((d: any) => d.currency_id === c.id),
   }));
   res.json(result);
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // HEALTH & START
@@ -437,6 +473,7 @@ async function start() {
   while (retries > 0) {
     try {
       await pool.query("SELECT 1");
+      await ensureDeviceSshCredentialColumns();
       console.log("Database connected successfully");
       break;
     } catch (err) {
@@ -450,9 +487,25 @@ async function start() {
     process.exit(1);
   }
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`CRM Backend running on port ${PORT}`);
   });
+
+  // Global error handler
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  });
+
+  // Graceful shutdown
+  const shutdown = async () => {
+    console.log('Shutting down gracefully...');
+    server.close();
+    await pool.end();
+    process.exit(0);
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 start().catch((err) => {

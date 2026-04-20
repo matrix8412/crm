@@ -89,6 +89,8 @@ export interface Device extends BaseEntity {
   ssid?: string;
   ssh_enabled: boolean;
   ssh_port?: number;
+  ssh_user?: string;
+  ssh_password?: string;
   http_enabled: boolean;
   http_port?: number;
   https_enabled: boolean;

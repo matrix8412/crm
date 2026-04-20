@@ -40,6 +40,14 @@ export const MapPicker = ({ lat, lon, onPositionChange }: MapPickerProps) => {
                 onPositionChange(position.lat.toFixed(6), position.lng.toFixed(6));
             });
         }
+
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+                markerRef.current = null;
+            }
+        };
     }, []);
 
     useEffect(() => {

@@ -2,7 +2,7 @@
 
 import { html } from 'htm/preact';
 import { render } from 'preact';
-import { useEffect, useRef, useMemo } from 'preact/hooks';
+import { useEffect, useRef, useMemo, useCallback } from 'preact/hooks';
 import { icons } from '../../constants/icons';
 import type { NetworkDevice } from '../../types';
 
@@ -43,6 +43,7 @@ export const DeviceMapView = ({ devices, filteredDevices, setModal, toggleDelete
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<any | null>(null);
     const markersRef = useRef<any[]>([]);
+    const popupNodesRef = useRef<HTMLElement[]>([]);
     const tileLayerRef = useRef<any | null>(null);
 
     const devicesWithGps = useMemo(() => 
@@ -85,14 +86,24 @@ export const DeviceMapView = ({ devices, filteredDevices, setModal, toggleDelete
             }).addTo(mapRef.current);
             updateMapTheme();
         }
+
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+                tileLayerRef.current = null;
+            }
+        };
     }, []);
     
     useEffect(() => {
         if (!mapRef.current) return;
 
-        // Clear existing markers
+        // Clear existing markers and unmount popup Preact trees
         markersRef.current.forEach(marker => marker.remove());
         markersRef.current = [];
+        popupNodesRef.current.forEach(node => render(null, node));
+        popupNodesRef.current = [];
 
         const filteredIds = new Set(filteredDevicesWithGps.map(d => d.id));
 
@@ -100,6 +111,7 @@ export const DeviceMapView = ({ devices, filteredDevices, setModal, toggleDelete
             const isHighlighted = filteredIds.has(device.id);
             const popupNode = document.createElement('div');
             render(html`<${MapPopup} device=${device} setModal=${setModal} toggleDeleteStatus=${toggleDeleteStatus} addToast=${addToast} />`, popupNode);
+            popupNodesRef.current.push(popupNode);
             
             const marker = L.marker([parseFloat(device.gpsLat), parseFloat(device.gpsLon)], {
                 opacity: isHighlighted ? 1.0 : 0.6

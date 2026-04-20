@@ -11,7 +11,8 @@ CREATE TABLE enum_values (
     ssid BOOLEAN DEFAULT FALSE,
     is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(category, label)
 );
 
 CREATE INDEX idx_enum_values_category ON enum_values(category);
@@ -47,6 +48,8 @@ CREATE TABLE sites (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX idx_sites_address ON sites(address_id);
+
 -- ============================================
 -- RACKS
 -- ============================================
@@ -61,12 +64,14 @@ CREATE TABLE racks (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX idx_racks_site ON racks(site_id);
+
 -- ============================================
 -- CUSTOMERS
 -- ============================================
 CREATE TABLE customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    customer_number VARCHAR(50),
+    customer_number VARCHAR(50) UNIQUE,
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     company_name VARCHAR(255),
@@ -86,6 +91,9 @@ CREATE TABLE customers (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX idx_customers_address ON customers(address_id);
+CREATE INDEX idx_customers_legal_form ON customers(legal_form_id);
 
 -- ============================================
 -- USER GROUPS
@@ -113,6 +121,8 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX idx_users_group ON users(group_id);
+
 -- ============================================
 -- DEVICES
 -- ============================================
@@ -130,6 +140,8 @@ CREATE TABLE devices (
     ssid VARCHAR(255),
     ssh_enabled BOOLEAN DEFAULT FALSE,
     ssh_port INTEGER,
+    ssh_user VARCHAR(255),
+    ssh_password VARCHAR(255),
     http_enabled BOOLEAN DEFAULT FALSE,
     http_port INTEGER,
     https_enabled BOOLEAN DEFAULT FALSE,
@@ -145,6 +157,11 @@ CREATE TABLE devices (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX idx_devices_vendor ON devices(vendor_id);
+CREATE INDEX idx_devices_parent ON devices(parent_device_id);
+CREATE INDEX idx_devices_rack ON devices(rack_id);
+CREATE INDEX idx_devices_type ON devices(device_type_id);
 
 -- ============================================
 -- PLANS
@@ -164,6 +181,11 @@ CREATE TABLE plans (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX idx_plans_customer ON plans(customer_id);
+CREATE INDEX idx_plans_device ON plans(device_id);
+CREATE INDEX idx_plans_category ON plans(category_id);
+CREATE INDEX idx_plans_scheduled ON plans(scheduled_from, scheduled_to);
+
 -- ============================================
 -- COMMENTS
 -- ============================================
@@ -172,8 +194,12 @@ CREATE TABLE comments (
     plan_id UUID REFERENCES plans(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     text TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX idx_comments_plan ON comments(plan_id);
+CREATE INDEX idx_comments_user ON comments(user_id);
 
 -- ============================================
 -- DEVICE TEMPLATES
@@ -316,6 +342,30 @@ CREATE TABLE audit_logs (
 
 CREATE INDEX idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
+
+-- ============================================
+-- AUTO-UPDATE updated_at TRIGGER
+-- ============================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+DECLARE
+    t TEXT;
+BEGIN
+    FOR t IN
+        SELECT table_name FROM information_schema.columns
+        WHERE column_name = 'updated_at' AND table_schema = 'public'
+        AND table_name NOT IN ('settings', 'audit_logs')
+    LOOP
+        EXECUTE format('CREATE TRIGGER set_updated_at BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()', t);
+    END LOOP;
+END $$;
 
 -- ============================================
 -- SETTINGS (key-value)

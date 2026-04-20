@@ -462,7 +462,7 @@ export class SettingsComponent implements OnInit {
     { key: 'site', label: 'Site', render: (r: any) => this.sites.find(s => s.id === r.site_id)?.name || '' }
   ];
 
-  private enumCategories = new Set(['vendor', 'legalForm', 'deviceGroup', 'deviceType', 'planCategory', 'reportingMethod', 'planPriority', 'ipamRoles', 'ipamTags']);
+  private enumCategories = new Set(['vendor', 'legalForm', 'deviceGroup', 'deviceType', 'planCategory', 'reportingMethod', 'planPriority']);
   private colorCategories = new Set(['planCategory', 'planPriority', 'ipamRoles', 'ipamTags', 'tags']);
 
   constructor(private api: ApiService, private toast: ToastService, public themeService: ThemeService) {}

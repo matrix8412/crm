@@ -132,6 +132,8 @@ import { Device, EnumValue, Address, Rack, ColumnDef } from '../../models';
                 <label><input type="checkbox" [(ngModel)]="form.ssh_enabled" name="ssh_en"> SSH</label>
                 @if (form.ssh_enabled) {
                   <input type="number" [(ngModel)]="form.ssh_port" name="ssh_port" class="form-control" placeholder="Port (default 22)">
+                  <input type="text" [(ngModel)]="form.ssh_user" name="ssh_user" class="form-control" placeholder="Username">
+                  <input type="password" [(ngModel)]="form.ssh_password" name="ssh_password" class="form-control" placeholder="Password">
                 }
               </div>
               <div class="form-group full-width toggle-group">

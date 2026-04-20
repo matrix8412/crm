@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { ThemeService } from '../../services/theme.service';
@@ -77,7 +77,7 @@ Chart.register(...registerables);
     canvas { max-height: 300px; }
   `]
 })
-export class DashboardComponent implements OnInit, AfterViewInit {
+export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('planChart') planChartRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('customerChart') customerChartRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('deviceChart') deviceChartRef!: ElementRef<HTMLCanvasElement>;
@@ -148,5 +148,10 @@ export class DashboardComponent implements OnInit, AfterViewInit {
         options: { responsive: true }
       }));
     }
+  }
+
+  ngOnDestroy() {
+    this.charts.forEach(c => c.destroy());
+    this.charts = [];
   }
 }

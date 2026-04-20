@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -7,9 +7,9 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="ss-wrapper" (clickOutside)="isOpen = false">
-      <div class="ss-input-wrapper" (click)="toggle()">
-        <input type="text" [placeholder]="placeholder" [(ngModel)]="searchTerm"
+    <div class="ss-wrapper">
+      <div class="ss-input-wrapper" (click)="open()">
+        <input type="text" [placeholder]="inputPlaceholder" [(ngModel)]="searchTerm"
           (input)="onFilter()" (focus)="isOpen = true" [required]="required">
         @if (selectedLabel && !searchTerm) {
           <span class="ss-selected">{{ selectedLabel }}</span>
@@ -36,7 +36,7 @@ import { FormsModule } from '@angular/forms';
     .ss-wrapper { position: relative; }
     .ss-input-wrapper { position: relative; cursor: pointer; }
     .ss-input-wrapper input { width: 100%; padding: 8px 28px 8px 12px; border: 1px solid var(--border-color, #ddd); border-radius: 8px; font-size: 14px; background: var(--bg-input, #fff); color: var(--text-primary, #333); box-sizing: border-box; }
-    .ss-selected { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 14px; color: var(--text-primary, #333); }
+    .ss-selected { position: absolute; left: 12px; right: 28px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 14px; color: var(--text-primary, #333); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ss-arrow { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--text-secondary, #888); pointer-events: none; }
     .ss-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-card, #fff); border: 1px solid var(--border-color, #ddd); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); max-height: 200px; overflow-y: auto; z-index: 100; margin-top: 4px; }
     .ss-option { padding: 8px 12px; cursor: pointer; font-size: 14px; }
@@ -57,6 +57,12 @@ export class SearchableSelectComponent implements OnInit {
   searchTerm = '';
   selectedLabel = '';
 
+  constructor(private elementRef: ElementRef<HTMLElement>) {}
+
+  get inputPlaceholder() {
+    return this.selectedLabel && !this.searchTerm ? '' : this.placeholder;
+  }
+
   ngOnInit() {
     this.updateLabel();
   }
@@ -76,7 +82,9 @@ export class SearchableSelectComponent implements OnInit {
     return this.options.filter(o => terms.every(t => o.label.toLowerCase().includes(t)));
   }
 
-  toggle() { this.isOpen = !this.isOpen; }
+  open() {
+    this.isOpen = true;
+  }
 
   select(value: string | null, label: string) {
     this.value = value;
@@ -91,7 +99,9 @@ export class SearchableSelectComponent implements OnInit {
   }
 
   onDocClick(event: MouseEvent) {
-    const el = event.target as HTMLElement;
-    if (!el.closest('app-searchable-select')) this.isOpen = false;
+    const target = event.target as Node | null;
+    if (target && !this.elementRef.nativeElement.contains(target)) {
+      this.isOpen = false;
+    }
   }
 }

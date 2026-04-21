@@ -62,7 +62,7 @@ import { Device, EnumValue, Address, Rack, ColumnDef } from '../../models';
     }
 
     @if (showForm) {
-      <app-modal [title]="editingId ? 'Edit Device' : 'Add Device'" customClass="modal-wide" (close)="closeForm()">
+      <app-modal [title]="editingId ? 'Edit Device' : 'Add Device'" customClass="modal-wide" (close)="requestCloseForm()">
         <form (ngSubmit)="saveDevice()">
           <div class="form-tabs">
             <button type="button" [class.active]="activeTab==='details'" (click)="activeTab='details'">Device Details</button>
@@ -160,11 +160,22 @@ import { Device, EnumValue, Address, Rack, ColumnDef } from '../../models';
           }
 
           <div class="form-actions">
-            <button type="button" class="btn" (click)="closeForm()">Cancel</button>
+            <button type="button" class="btn" (click)="requestCloseForm()">Cancel</button>
             <button type="submit" class="btn btn-primary">{{ editingId ? 'Update' : 'Create' }}</button>
           </div>
         </form>
       </app-modal>
+    }
+
+    @if (showDiscardConfirm) {
+      <app-confirm-modal
+        title="Discard unsaved changes?"
+        message="You have unsaved changes. Are you sure you want to discard them?"
+        confirmText="Discard"
+        cancelText="Cancel"
+        (confirm)="confirmCloseForm()"
+        (cancel)="cancelCloseForm()">
+      </app-confirm-modal>
     }
 
     @if (confirmItem) {
@@ -219,6 +230,8 @@ export class DevicesComponent implements OnInit {
   viewMode: 'table' | 'tree' | 'map' = 'table';
   activeTab: 'details' | 'connection' = 'details';
   treeSearch = '';
+  showDiscardConfirm = false;
+  private formSnapshot = '';
 
   form: Partial<Device> = {};
 
@@ -285,10 +298,32 @@ export class DevicesComponent implements OnInit {
       this.editingId = null;
       this.form = { ssh_enabled: false, http_enabled: false, https_enabled: false, api_enabled: false, rack_height: 1 };
     }
+    this.formSnapshot = this.serialize(this.form);
     this.showForm = true;
   }
 
-  closeForm() { this.showForm = false; this.form = {}; this.editingId = null; }
+  closeForm() { this.showForm = false; this.form = {}; this.editingId = null; this.formSnapshot = ''; }
+
+  requestCloseForm() {
+    if (this.serialize(this.form) !== this.formSnapshot) {
+      this.showDiscardConfirm = true;
+      return;
+    }
+    this.closeForm();
+  }
+
+  confirmCloseForm() {
+    this.showDiscardConfirm = false;
+    this.closeForm();
+  }
+
+  cancelCloseForm() {
+    this.showDiscardConfirm = false;
+  }
+
+  private serialize(value: unknown): string {
+    return JSON.stringify(value ?? {});
+  }
 
   saveDevice() {
     const obs = this.editingId
@@ -303,6 +338,7 @@ export class DevicesComponent implements OnInit {
   copyDevice(device: Device) {
     this.form = { ...device, id: undefined as any, name: device.name + ' (Copy)' };
     this.editingId = null;
+    this.formSnapshot = this.serialize(this.form);
     this.showForm = true;
   }
 

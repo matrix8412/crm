@@ -2,18 +2,33 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { html } from 'htm/preact';
 
-export const Modal = ({ children, onClose, customClass = '' }) => {
+export const Modal = ({ children, onClose, customClass = '', isDirty = false, onConfirmClose = null }) => {
   const mouseDownOnOverlay = useRef(false);
+
+  const handleCloseAttempt = () => {
+    // If modal has unsaved changes and a confirmation handler is provided, call it
+    // Otherwise, close directly
+    if (isDirty && onConfirmClose) {
+      onConfirmClose();
+    } else {
+      onClose();
+    }
+  };
 
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
-        onClose();
+        // Check isDirty and call appropriate handler
+        if (isDirty && onConfirmClose) {
+          onConfirmClose();
+        } else {
+          onClose();
+        }
       }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
+  }, [onClose, isDirty, onConfirmClose]);
 
   const handleMouseDown = (e) => {
     if (e.target === e.currentTarget) {
@@ -23,7 +38,7 @@ export const Modal = ({ children, onClose, customClass = '' }) => {
 
   const handleMouseUp = (e) => {
     if (mouseDownOnOverlay.current && e.target === e.currentTarget) {
-      onClose();
+      handleCloseAttempt();
     }
     mouseDownOnOverlay.current = false;
   };

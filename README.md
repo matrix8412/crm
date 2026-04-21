@@ -1,20 +1,96 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# CRM
 
-# Run and deploy your AI Studio app
+Tento projekt sa vyvija a testuje cez Docker Compose.
 
-This contains everything you need to run your app locally.
+## Architektura
 
-View your app in AI Studio: https://ai.studio/apps/drive/12Oqnc_6NsGy3qD_3yPRKQlA4IElqLe_1
+- `frontend/` - Angular frontend servovany cez Nginx na porte `80`
+- `backend/` - Node.js backend na porte `4000`
+- `database/` - PostgreSQL inicializacia
 
-## Run Locally
+Root Vite/Preact frontend bol odstraneny, pretoze sa v tomto repozitari uz nepouziva.
 
-**Prerequisites:**  Node.js
+## Spustenie
 
+Predpoklady:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- Docker
+- Docker Compose
+
+Spustenie celej aplikacie:
+
+```bash
+docker compose up --build -d
+```
+
+Frontend bude dostupny na:
+
+```text
+http://localhost:80
+```
+
+Backend bude dostupny na:
+
+```text
+http://localhost:4000
+```
+
+Databaza bude dostupna na:
+
+```text
+localhost:5432
+```
+
+## Bezne prikazy
+
+Rebuild len frontendu:
+
+```bash
+docker compose up --build -d frontend
+```
+
+Rebuild len backendu:
+
+```bash
+docker compose up --build -d backend
+```
+
+Zastavenie kontajnerov:
+
+```bash
+docker compose down
+```
+
+Zastavenie kontajnerov aj s volume databazy:
+
+```bash
+docker compose down -v
+```
+
+Logy:
+
+```bash
+docker compose logs -f
+```
+
+Logy len frontendu:
+
+```bash
+docker compose logs -f frontend
+```
+
+Logy len backendu:
+
+```bash
+docker compose logs -f backend
+```
+
+## Vyvojovy workflow
+
+Odporucany workflow vo VS Code:
+
+1. Upravit kod v `frontend/`, `backend/` alebo `database/`.
+2. Spustit rebuild prislusnej sluzby cez Docker Compose.
+3. Overit zmeny v kontajnerizovanej aplikacii na porte `80`.
+
+Projekt uz nevyzaduje ani nepouziva Vite dev server v root adresari.

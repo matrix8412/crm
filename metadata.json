@@ -1,8 +1,0 @@
-{
-  "name": "CRM Application",
-  "description": "A feature-rich CRM to manage customers, network devices, and planning.",
-  "requestFramePermissions": [
-    "geolocation"
-  ],
-  "prompt": ""
-}

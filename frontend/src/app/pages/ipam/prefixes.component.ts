@@ -22,7 +22,7 @@ import { Prefix, EnumValue, Site, ColumnDef } from '../../models';
     </app-data-table>
 
     @if (showForm) {
-      <app-modal [title]="editingId ? 'Edit Prefix' : 'Add Prefix'" (close)="closeForm()">
+      <app-modal [title]="editingId ? 'Edit Prefix' : 'Add Prefix'" (close)="requestCloseForm()">
         <form (ngSubmit)="save()">
           <div class="form-grid">
             <div class="form-group">
@@ -62,11 +62,22 @@ import { Prefix, EnumValue, Site, ColumnDef } from '../../models';
             </div>
           </div>
           <div class="form-actions">
-            <button type="button" class="btn" (click)="closeForm()">Cancel</button>
+            <button type="button" class="btn" (click)="requestCloseForm()">Cancel</button>
             <button type="submit" class="btn btn-primary">{{ editingId ? 'Update' : 'Create' }}</button>
           </div>
         </form>
       </app-modal>
+    }
+
+    @if (showDiscardConfirm) {
+      <app-confirm-modal
+        title="Discard unsaved changes?"
+        message="You have unsaved changes. Are you sure you want to discard them?"
+        confirmText="Discard"
+        cancelText="Cancel"
+        (confirm)="confirmCloseForm()"
+        (cancel)="cancelCloseForm()">
+      </app-confirm-modal>
     }
 
     @if (confirmItem) {
@@ -94,6 +105,8 @@ export class PrefixesComponent implements OnInit {
   showForm = false;
   editingId: string | null = null;
   confirmItem: Prefix | null = null;
+  showDiscardConfirm = false;
+  private formSnapshot = '';
   form: Partial<Prefix> = {};
 
   columns: ColumnDef[] = [
@@ -117,12 +130,48 @@ export class PrefixesComponent implements OnInit {
   get siteOptions() { return this.sites.filter(s => !s.is_deleted).map(s => ({ value: s.id, label: s.name })); }
 
   openForm(item?: Prefix) {
-    if (item) { this.editingId = item.id; this.form = { ...item }; this.api.getTags('prefixes', item.id).subscribe(t => this.tagIds = t); }
-    else { this.editingId = null; this.form = { status: 'active', is_pool: false }; this.tagIds = []; }
+    if (item) {
+      this.editingId = item.id;
+      this.form = { ...item };
+      this.api.getTags('prefixes', item.id).subscribe(t => {
+        this.tagIds = t;
+        this.formSnapshot = this.serializeCurrentState();
+      });
+    }
+    else {
+      this.editingId = null;
+      this.form = { status: 'active', is_pool: false };
+      this.tagIds = [];
+      this.formSnapshot = this.serializeCurrentState();
+    }
     this.showForm = true;
   }
 
-  closeForm() { this.showForm = false; this.form = {}; this.editingId = null; }
+  closeForm() { this.showForm = false; this.form = {}; this.editingId = null; this.tagIds = []; this.formSnapshot = ''; }
+
+  requestCloseForm() {
+    if (this.serializeCurrentState() !== this.formSnapshot) {
+      this.showDiscardConfirm = true;
+      return;
+    }
+    this.closeForm();
+  }
+
+  confirmCloseForm() {
+    this.showDiscardConfirm = false;
+    this.closeForm();
+  }
+
+  cancelCloseForm() {
+    this.showDiscardConfirm = false;
+  }
+
+  private serializeCurrentState(): string {
+    return JSON.stringify({
+      form: this.form ?? {},
+      tagIds: [...(this.tagIds ?? [])].sort()
+    });
+  }
 
   save() {
     const obs = this.editingId ? this.api.updatePrefix(this.editingId, this.form) : this.api.createPrefix(this.form);
@@ -136,7 +185,12 @@ export class PrefixesComponent implements OnInit {
     });
   }
 
-  copyItem(item: Prefix) { this.form = { ...item, id: undefined as any }; this.editingId = null; this.showForm = true; }
+  copyItem(item: Prefix) {
+    this.form = { ...item, id: undefined as any };
+    this.editingId = null;
+    this.formSnapshot = this.serializeCurrentState();
+    this.showForm = true;
+  }
 
   toggleDelete() {
     if (!this.confirmItem) return;

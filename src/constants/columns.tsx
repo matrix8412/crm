@@ -99,7 +99,7 @@ export const createCustomerColumnConfig = (setModal, toggleDeleteStatus, enumMap
             `)}
         </div>
     `}
-})};
+};
 
 export const createDeviceColumnConfig = (setModal, toggleDeleteStatus, enumMaps, deviceMap, addressMap, addToast, openRowActionDropdown, setOpenRowActionDropdown): ColumnConfig<NetworkDevice> => {
     const handleAction = (action) => {

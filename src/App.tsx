@@ -958,21 +958,23 @@ export const App = () => {
     };
 
     const handleModalClose = () => {
-        if (isModalFormDirty) {
-            setConfirmationModal({
-                title: 'Discard unsaved changes?',
-                message: 'You have unsaved changes. Are you sure you want to discard them?',
-                confirmText: 'Discard',
-                confirmClass: 'btn-danger',
-                onConfirm: () => {
-                    setModal(null);
-                    setModalFormDirty(false);
-                    setConfirmationModal(null);
-                },
-            });
-        } else {
-            setModal(null);
-        }
+        setModal(null);
+        setModalFormDirty(false);
+    };
+
+    const handleConfirmClose = () => {
+        setConfirmationModal({
+            title: 'Discard unsaved changes?',
+            message: 'You have unsaved changes. Are you sure you want to discard them?',
+            confirmText: 'Discard',
+            cancelText: 'Cancel',
+            confirmClass: 'btn-danger',
+            onConfirm: () => {
+                setModal(null);
+                setModalFormDirty(false);
+                setConfirmationModal(null);
+            },
+        });
     };
 
   // --- Handlers & Logic ---
@@ -2010,7 +2012,7 @@ export const App = () => {
               ${renderContent()}
           </main>
       </div>
-       ${modal && html`<${Modal} onClose=${handleModalClose} customClass=${modal.type === 'deviceDetails' ? 'modal-device-details' : ''}>${renderModalContent()}<//>`}
+       ${modal && html`<${Modal} onClose=${handleModalClose} isDirty=${isModalFormDirty} onConfirmClose=${handleConfirmClose} customClass=${modal.type === 'deviceDetails' ? 'modal-device-details' : ''}>${renderModalContent()}<//>`}
        ${confirmationModal && html`<${Modal} onClose=${() => setConfirmationModal(null)}><${ConfirmationModal} ...${confirmationModal} onCancel=${() => setConfirmationModal(null)} /><//>`}
        ${isGlobalSearchOpen && html`<${GlobalSearchModal} query=${globalSearchQuery} results=${globalSearchResults} onClose=${() => setGlobalSearchOpen(false)} onResultClick=${handleResultClick} customerMap=${customerMap} deviceMap=${deviceMap} enumerations=${enumerations} />`}
     </div>

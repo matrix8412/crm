@@ -30,7 +30,7 @@ import { Customer, EnumValue, Address, ColumnDef } from '../../models';
 
     <!-- Form Modal -->
     @if (showForm) {
-      <app-modal [title]="editingId ? 'Edit Customer' : 'Add Customer'" (close)="closeForm()">
+      <app-modal [title]="editingId ? 'Edit Customer' : 'Add Customer'" (close)="requestCloseForm('customer')">
         <form (ngSubmit)="saveCustomer()">
           <div class="form-grid">
             <div class="form-group">
@@ -125,7 +125,7 @@ import { Customer, EnumValue, Address, ColumnDef } from '../../models';
             </div>
           </div>
           <div class="form-actions">
-            <button type="button" class="btn" (click)="closeForm()">Cancel</button>
+            <button type="button" class="btn" (click)="requestCloseForm('customer')">Cancel</button>
             <button type="submit" class="btn btn-primary">{{ editingId ? 'Update' : 'Create' }}</button>
           </div>
         </form>
@@ -134,7 +134,7 @@ import { Customer, EnumValue, Address, ColumnDef } from '../../models';
 
     <!-- New Address Modal -->
     @if (showNewAddressForm) {
-      <app-modal title="Add New Address" (close)="showNewAddressForm = false">
+      <app-modal title="Add New Address" (close)="requestCloseForm('address')">
         <form (ngSubmit)="saveNewAddress()">
           <div class="form-grid">
             <div class="form-group"><label>Street</label><input type="text" [(ngModel)]="newAddrForm.street" name="n_street" class="form-control"></div>
@@ -145,11 +145,22 @@ import { Customer, EnumValue, Address, ColumnDef } from '../../models';
             <div class="form-group"><label>State</label><input type="text" [(ngModel)]="newAddrForm.state" name="n_state" class="form-control"></div>
           </div>
           <div class="form-actions">
-            <button type="button" class="btn" (click)="showNewAddressForm = false">Cancel</button>
+            <button type="button" class="btn" (click)="requestCloseForm('address')">Cancel</button>
             <button type="submit" class="btn btn-primary">Save Address</button>
           </div>
         </form>
       </app-modal>
+    }
+
+    @if (showDiscardConfirm) {
+      <app-confirm-modal
+        title="Discard unsaved changes?"
+        message="You have unsaved changes. Are you sure you want to discard them?"
+        confirmText="Discard"
+        cancelText="Cancel"
+        (confirm)="confirmCloseForm()"
+        (cancel)="cancelCloseForm()">
+      </app-confirm-modal>
     }
 
     <!-- Confirm Delete -->
@@ -190,8 +201,12 @@ export class CustomersComponent implements OnInit {
   confirmItem: Customer | null = null;
   showHistoryFor: any = null;
   showNewAddressForm = false;
+  showDiscardConfirm = false;
   newAddrForm: Partial<Address> = {};
   newAddrTarget: 'main' | 'correspondence' = 'main';
+  private pendingCloseTarget: 'customer' | 'address' | null = null;
+  private formSnapshot = '';
+  private newAddressSnapshot = '';
 
   form: Partial<Customer> = {};
 
@@ -232,6 +247,7 @@ export class CustomersComponent implements OnInit {
   openNewAddress(target: 'main' | 'correspondence') {
     this.newAddrTarget = target;
     this.newAddrForm = {};
+    this.newAddressSnapshot = this.serialize(this.newAddrForm);
     this.showNewAddressForm = true;
   }
 
@@ -239,7 +255,7 @@ export class CustomersComponent implements OnInit {
     this.api.createAddress(this.newAddrForm).subscribe({
       next: (created: any) => {
         this.toast.success('Address created');
-        this.showNewAddressForm = false;
+        this.performClose('address');
         this.api.getAddresses().subscribe(a => {
           this.addresses = a;
           if (created?.id) {
@@ -275,13 +291,58 @@ export class CustomersComponent implements OnInit {
       this.editingId = null;
       this.form = { customer_number: `C-${Date.now().toString(36).toUpperCase()}` };
     }
+    this.formSnapshot = this.serialize(this.form);
     this.showForm = true;
   }
 
   closeForm() {
+    this.performClose('customer');
+  }
+
+  requestCloseForm(target: 'customer' | 'address') {
+    if (this.hasUnsavedChanges(target)) {
+      this.pendingCloseTarget = target;
+      this.showDiscardConfirm = true;
+      return;
+    }
+    this.performClose(target);
+  }
+
+  confirmCloseForm() {
+    if (this.pendingCloseTarget) {
+      this.performClose(this.pendingCloseTarget);
+    }
+    this.cancelCloseForm();
+  }
+
+  cancelCloseForm() {
+    this.showDiscardConfirm = false;
+    this.pendingCloseTarget = null;
+  }
+
+  private hasUnsavedChanges(target: 'customer' | 'address'): boolean {
+    if (target === 'address') {
+      return this.serialize(this.newAddrForm) !== this.newAddressSnapshot;
+    }
+    return this.serialize(this.form) !== this.formSnapshot;
+  }
+
+  private performClose(target: 'customer' | 'address') {
+    if (target === 'address') {
+      this.showNewAddressForm = false;
+      this.newAddrForm = {};
+      this.newAddressSnapshot = '';
+      return;
+    }
+
     this.showForm = false;
     this.form = {};
     this.editingId = null;
+    this.formSnapshot = '';
+  }
+
+  private serialize(value: unknown): string {
+    return JSON.stringify(value ?? {});
   }
 
   saveCustomer() {
@@ -306,6 +367,7 @@ export class CustomersComponent implements OnInit {
   copyCustomer(customer: Customer) {
     this.form = { ...customer, id: undefined as any, customer_number: `C-${Date.now().toString(36).toUpperCase()}` };
     this.editingId = null;
+    this.formSnapshot = this.serialize(this.form);
     this.showForm = true;
   }
 

@@ -55,7 +55,7 @@ import { Plan, Customer, Device, EnumValue, Comment, User, ColumnDef } from '../
     }
 
     @if (showForm) {
-      <app-modal [title]="editingId ? 'Edit Plan' : 'Add Plan'" (close)="closeForm()">
+      <app-modal [title]="editingId ? 'Edit Plan' : 'Add Plan'" (close)="requestCloseForm()">
         <form (ngSubmit)="savePlan()">
           <div class="form-grid">
             <div class="form-group">
@@ -112,11 +112,22 @@ import { Plan, Customer, Device, EnumValue, Comment, User, ColumnDef } from '../
           }
 
           <div class="form-actions">
-            <button type="button" class="btn" (click)="closeForm()">Cancel</button>
+            <button type="button" class="btn" (click)="requestCloseForm()">Cancel</button>
             <button type="submit" class="btn btn-primary">{{ editingId ? 'Update' : 'Create' }}</button>
           </div>
         </form>
       </app-modal>
+    }
+
+    @if (showDiscardConfirm) {
+      <app-confirm-modal
+        title="Discard unsaved changes?"
+        message="You have unsaved changes. Are you sure you want to discard them?"
+        confirmText="Discard"
+        cancelText="Cancel"
+        (confirm)="confirmCloseForm()"
+        (cancel)="cancelCloseForm()">
+      </app-confirm-modal>
     }
 
     @if (confirmItem) {
@@ -176,6 +187,8 @@ export class PlanningComponent implements OnInit {
   viewMode: 'table' | 'calendar' = 'table';
   newComment = '';
   calendarDate = new Date();
+  showDiscardConfirm = false;
+  private formSnapshot = '';
 
   form: Partial<Plan> = {};
 
@@ -279,10 +292,36 @@ export class PlanningComponent implements OnInit {
       this.form = {};
       this.planComments = [];
     }
+    this.newComment = '';
+    this.formSnapshot = this.serializeCurrentState();
     this.showForm = true;
   }
 
-  closeForm() { this.showForm = false; this.form = {}; this.editingId = null; }
+  closeForm() { this.showForm = false; this.form = {}; this.editingId = null; this.newComment = ''; this.formSnapshot = ''; }
+
+  requestCloseForm() {
+    if (this.serializeCurrentState() !== this.formSnapshot) {
+      this.showDiscardConfirm = true;
+      return;
+    }
+    this.closeForm();
+  }
+
+  confirmCloseForm() {
+    this.showDiscardConfirm = false;
+    this.closeForm();
+  }
+
+  cancelCloseForm() {
+    this.showDiscardConfirm = false;
+  }
+
+  private serializeCurrentState(): string {
+    return JSON.stringify({
+      form: this.form ?? {},
+      newComment: this.newComment ?? ''
+    });
+  }
 
   savePlan() {
     const obs = this.editingId
@@ -297,6 +336,8 @@ export class PlanningComponent implements OnInit {
   copyPlan(plan: Plan) {
     this.form = { ...plan, id: undefined as any };
     this.editingId = null;
+    this.newComment = '';
+    this.formSnapshot = this.serializeCurrentState();
     this.showForm = true;
   }
 

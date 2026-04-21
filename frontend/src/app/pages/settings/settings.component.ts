@@ -11,6 +11,7 @@ import { ConfirmModalComponent } from '../../shared/confirm-modal.component';
 import { SearchableSelectComponent } from '../../shared/searchable-select.component';
 
 interface NavCategory { key: string; label: string; icon: string; items: { key: string; label: string; }[]; }
+type LogoVariant = 'light' | 'dark';
 
 @Component({
   selector: 'app-settings',
@@ -147,6 +148,46 @@ interface NavCategory { key: string; label: string; icon: string; items: { key: 
             <h3>UI Settings</h3>
             <div class="settings-list">
               <div class="setting-row"><label>Application Name</label><input type="text" [(ngModel)]="settings.appName" (change)="saveSetting('appName', settings.appName)" class="form-control" style="max-width:300px"></div>
+              <div class="setting-row setting-row-top">
+                <label>Application Logos</label>
+                <div class="branding-groups">
+                  <div class="branding-group">
+                    <div class="branding-group-header">Light Theme</div>
+                    <div class="branding-controls">
+                      <div class="branding-preview" [class.has-logo]="!!settings.appLogoLight">
+                        @if (settings.appLogoLight) {
+                          <img [src]="settings.appLogoLight" [alt]="settings.appName + ' light logo preview'">
+                        } @else {
+                          <span>🌤️</span>
+                        }
+                      </div>
+                      <div class="branding-actions">
+                        <input #lightLogoInput type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" (change)="onLogoSelected('light', $event)" hidden>
+                        <button type="button" class="btn btn-primary" (click)="lightLogoInput.click()">Upload Light Logo</button>
+                        <button type="button" class="btn" (click)="clearLogo('light')" [disabled]="!settings.appLogoLight">Remove</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="branding-group">
+                    <div class="branding-group-header">Dark Theme</div>
+                    <div class="branding-controls">
+                      <div class="branding-preview" [class.has-logo]="!!settings.appLogoDark">
+                        @if (settings.appLogoDark) {
+                          <img [src]="settings.appLogoDark" [alt]="settings.appName + ' dark logo preview'">
+                        } @else {
+                          <span>🌙</span>
+                        }
+                      </div>
+                      <div class="branding-actions">
+                        <input #darkLogoInput type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" (change)="onLogoSelected('dark', $event)" hidden>
+                        <button type="button" class="btn btn-primary" (click)="darkLogoInput.click()">Upload Dark Logo</button>
+                        <button type="button" class="btn" (click)="clearLogo('dark')" [disabled]="!settings.appLogoDark">Remove</button>
+                      </div>
+                    </div>
+                  </div>
+                  <span class="setting-help">Images are optimized automatically before save. PNG, JPG, WEBP, GIF or SVG up to 2 MB.</span>
+                </div>
+              </div>
               <div class="setting-row">
                 <label>Appearance Theme</label>
                 <div class="segmented">
@@ -338,7 +379,29 @@ interface NavCategory { key: string; label: string; icon: string; items: { key: 
     .sub-section h4 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
     .settings-list { display: flex; flex-direction: column; gap: 0; }
     .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border-color,#f0f0f0); gap: 16px; }
+    .setting-row.setting-row-top { align-items: flex-start; }
     .setting-row label:first-child { font-size: 14px; font-weight: 500; min-width: 200px; color: var(--text-primary,#333); }
+    .branding-groups { display: flex; flex-direction: column; gap: 12px; width: min(100%, 560px); }
+    .branding-group { display: flex; flex-direction: column; gap: 8px; }
+    .branding-group-header { font-size: 13px; font-weight: 600; color: var(--text-secondary,#666); }
+    .branding-controls { display: flex; align-items: center; gap: 16px; justify-content: flex-end; flex-wrap: wrap; }
+    .branding-preview {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      border: 1px solid var(--border-color,#ddd);
+      background: var(--bg-secondary,#f8f9fa);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .branding-preview.has-logo { background: var(--bg-card,#fff); }
+    .branding-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .branding-preview span { font-size: 32px; line-height: 1; }
+    .branding-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: 420px; }
+    .setting-help { width: 100%; font-size: 12px; color: var(--text-secondary,#666); }
     .segmented { display: flex; gap: 0; border: 1px solid var(--border-color,#ddd); border-radius: 8px; overflow: hidden; }
     .segmented button { padding: 6px 14px; border: none; background: var(--bg-card,#fff); cursor: pointer; font-size: 13px; border-right: 1px solid var(--border-color,#ddd); color: var(--text-primary,#333); }
     .segmented button:last-child { border-right: none; }
@@ -370,6 +433,10 @@ interface NavCategory { key: string; label: string; icon: string; items: { key: 
   `]
 })
 export class SettingsComponent implements OnInit {
+  private static readonly MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024;
+  private static readonly MAX_LOGO_DIMENSION = 512;
+  private static readonly LOGO_OUTPUT_QUALITY = 0.82;
+
   navCategories: NavCategory[] = [
     { key: 'userManagement', label: 'User Management', icon: '👥', items: [
       { key: 'users', label: 'Users' }, { key: 'userGroups', label: 'User Groups' }
@@ -402,7 +469,7 @@ export class SettingsComponent implements OnInit {
   enumSearch = '';
 
   settings: AppSettings = {
-    appName: 'CRM', theme: 'light', sidebarAutohide: false, toastOpacity: 0.95,
+    appName: 'CRM', appLogoLight: null, appLogoDark: null, theme: 'light', sidebarAutohide: false, toastOpacity: 0.95,
     toastPosition: 'top-right', toastTextColor: '#ffffff', glossyMode: false,
     rowsPerPage: 10, showTableHeaderFilters: true, minRecordsForFilters: 5, defaultPlanDuration: 60,
     moduleVisibility: { customers: true, devices: true, ipam: true, planning: true, invoicing: false, warehouse: false, tools: true },
@@ -479,6 +546,9 @@ export class SettingsComponent implements OnInit {
     this.api.getRacks().subscribe(d => this.racks = d);
     this.api.getSettings().subscribe(s => {
       if (s['appName'] !== undefined) this.settings.appName = s['appName'];
+      const legacyLogo = typeof s['appLogo'] === 'string' ? s['appLogo'] : null;
+      this.settings.appLogoLight = typeof s['appLogoLight'] === 'string' ? s['appLogoLight'] : legacyLogo;
+      this.settings.appLogoDark = typeof s['appLogoDark'] === 'string' ? s['appLogoDark'] : legacyLogo;
       if (s['theme'] !== undefined) this.settings.theme = s['theme'];
       if (s['sidebarAutohide'] !== undefined) this.settings.sidebarAutohide = s['sidebarAutohide'];
       if (s['toastOpacity'] !== undefined) this.settings.toastOpacity = s['toastOpacity'];
@@ -576,8 +646,117 @@ export class SettingsComponent implements OnInit {
 
   // Settings
   setTheme(t: 'light' | 'dark' | 'system') { this.settings.theme = t; this.saveSetting('theme', t); this.themeService.setTheme(t); }
+
+  async onLogoSelected(variant: LogoVariant, event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      this.toast.error('Please select a valid image file.');
+      input.value = '';
+      return;
+    }
+
+    if (file.size > SettingsComponent.MAX_LOGO_SIZE_BYTES) {
+      this.toast.error('Logo file must be 2 MB or smaller.');
+      input.value = '';
+      return;
+    }
+
+    try {
+      const optimizedLogo = await this.getOptimizedLogoDataUrl(file);
+      const settingKey = this.getLogoSettingKey(variant);
+      this.settings[settingKey] = optimizedLogo;
+      this.saveSetting(settingKey, optimizedLogo);
+      input.value = '';
+    } catch {
+      this.toast.error('Failed to process the selected image.');
+      input.value = '';
+    }
+  }
+
+  clearLogo(variant: LogoVariant) {
+    const settingKey = this.getLogoSettingKey(variant);
+    if (!this.settings[settingKey]) return;
+    this.settings[settingKey] = null;
+    this.saveSetting(settingKey, null);
+  }
+
+  private getLogoSettingKey(variant: LogoVariant): 'appLogoLight' | 'appLogoDark' {
+    return variant === 'light' ? 'appLogoLight' : 'appLogoDark';
+  }
+
+  private async getOptimizedLogoDataUrl(file: File): Promise<string> {
+    const originalDataUrl = await this.readFileAsDataUrl(file);
+    if (file.type === 'image/svg+xml') {
+      return originalDataUrl;
+    }
+
+    const optimizedDataUrl = await this.compressRasterImage(originalDataUrl);
+    return optimizedDataUrl.length < originalDataUrl.length ? optimizedDataUrl : originalDataUrl;
+  }
+
+  private readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+          return;
+        }
+
+        reject(new Error('Invalid file reader result.'));
+      };
+      reader.onerror = () => reject(reader.error ?? new Error('Failed to read file.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private compressRasterImage(dataUrl: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => {
+        const { width, height } = this.getScaledDimensions(image.width, image.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d');
+        if (!context) {
+          resolve(dataUrl);
+          return;
+        }
+
+        context.clearRect(0, 0, width, height);
+        context.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/webp', SettingsComponent.LOGO_OUTPUT_QUALITY));
+      };
+      image.onerror = () => reject(new Error('Failed to load image.'));
+      image.src = dataUrl;
+    });
+  }
+
+  private getScaledDimensions(width: number, height: number) {
+    const longestSide = Math.max(width, height);
+    if (longestSide <= SettingsComponent.MAX_LOGO_DIMENSION) {
+      return { width, height };
+    }
+
+    const scale = SettingsComponent.MAX_LOGO_DIMENSION / longestSide;
+    return {
+      width: Math.max(1, Math.round(width * scale)),
+      height: Math.max(1, Math.round(height * scale)),
+    };
+  }
+
   saveSetting(key: string, value: any) {
-    this.api.updateSetting(key, value).subscribe({ next: () => this.toast.success(`${key} updated`) });
+    this.api.updateSetting(key, value).subscribe({
+      next: () => {
+        this.toast.success(`${key} updated`);
+        window.dispatchEvent(new CustomEvent('app-settings-updated'));
+      }
+    });
     // Apply DOM-affecting settings immediately
     if (key === 'glossyMode') this.themeService.setGlossy(value);
   }

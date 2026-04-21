@@ -4,7 +4,13 @@
     (mouseenter)="sidebarAutohide && (isSidebarHovered = true)"
     (mouseleave)="sidebarAutohide && (isSidebarHovered = false)">
     <div class="sidebar-header">
-      <span class="logo">📋</span>
+      <div class="logo" [class.logo-has-image]="!!activeAppLogo">
+        @if (activeAppLogo) {
+          <img class="logo-image" [src]="activeAppLogo" [alt]="appName + ' logo'">
+        } @else {
+          <span class="logo-fallback">📋</span>
+        }
+      </div>
       @if (isMenuOpen) {
         <span class="app-title">{{ appName }}</span>
       }

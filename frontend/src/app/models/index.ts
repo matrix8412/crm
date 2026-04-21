@@ -196,6 +196,9 @@ export interface AuditLog {
 // ─── Settings ────────────────────────────
 export interface AppSettings {
   appName: string;
+  appLogoLight: string | null;
+  appLogoDark: string | null;
+  appLogo?: string | null;
   theme: 'light' | 'dark' | 'system';
   sidebarAutohide: boolean;
   toastOpacity: number;

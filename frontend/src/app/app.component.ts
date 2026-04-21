@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router, NavigationEnd } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -23,8 +23,11 @@ interface NavItem {
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css'],
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   appName = 'CRM Application';
+  appLogoLight: string | null = null;
+  appLogoDark: string | null = null;
+  legacyAppLogo: string | null = null;
   isMenuOpen = true;
   isSidebarHovered = false;
   sidebarAutohide = false;
@@ -68,18 +71,36 @@ export class AppComponent implements OnInit {
     private toastService: ToastService,
   ) {}
 
+  private readonly settingsUpdatedHandler = () => this.loadSettings();
+
+  get activeAppLogo(): string | null {
+    if (this.theme.isDark) {
+      return this.appLogoDark || this.appLogoLight || this.legacyAppLogo;
+    }
+
+    return this.appLogoLight || this.appLogoDark || this.legacyAppLogo;
+  }
+
   ngOnInit() {
     this.toastService.toasts$.subscribe(t => this.toasts = t);
     this.loadSettings();
+    window.addEventListener('app-settings-updated', this.settingsUpdatedHandler);
     // Reload settings when navigating away from settings page
     this.router.events.pipe(
       filter((e): e is NavigationEnd => e instanceof NavigationEnd)
     ).subscribe(() => this.loadSettings());
   }
 
+  ngOnDestroy() {
+    window.removeEventListener('app-settings-updated', this.settingsUpdatedHandler);
+  }
+
   loadSettings() {
     this.api.getSettings().subscribe(s => {
       if (s['appName']) this.appName = s['appName'];
+      this.appLogoLight = typeof s['appLogoLight'] === 'string' ? s['appLogoLight'] : null;
+      this.appLogoDark = typeof s['appLogoDark'] === 'string' ? s['appLogoDark'] : null;
+      this.legacyAppLogo = typeof s['appLogo'] === 'string' ? s['appLogo'] : null;
       if (s['sidebarAutohide'] !== undefined) this.sidebarAutohide = s['sidebarAutohide'];
       if (s['moduleVisibility']) this.moduleVisibility = s['moduleVisibility'] as ModuleVisibility;
       if (s['theme']) this.theme.setTheme(s['theme'] as string);

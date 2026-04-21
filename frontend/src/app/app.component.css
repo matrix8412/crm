@@ -28,7 +28,25 @@
   border-bottom: 1px solid rgba(255,255,255,0.1);
   min-height: 70px;
 }
-.logo { font-size: 24px; }
+.logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.logo.logo-has-image { background: rgba(255,255,255,0.08); }
+.logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.logo-fallback { font-size: 22px; line-height: 1; }
 .app-title { font-weight: 700; font-size: 16px; white-space: nowrap; }
 
 .sidebar-nav { flex: 1; padding: 8px 0; }
